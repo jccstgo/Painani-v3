@@ -1,0 +1,160 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración - Painani</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎛️</text></svg>">
+    <meta name="robots" content="noindex,nofollow">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Tabs como pestañas reales -->
+        <div class="admin-tabs-container">
+            <div class="admin-tabs">
+                <button class="tab-button active" data-tab="tab-game">
+                    <span class="tab-icon">🎮</span>
+                    <span class="tab-label">Juego</span>
+                </button>
+                <button class="tab-button" data-tab="tab-teams">
+                    <span class="tab-icon">👥</span>
+                    <span class="tab-label">Equipos y Puntajes</span>
+                </button>
+                <button class="tab-button" data-tab="tab-config">
+                    <span class="tab-icon">⚙️</span>
+                    <span class="tab-label">Configuración</span>
+                </button>
+            </div>
+            <div class="admin-status">
+                <div id="admin-conn" class="admin-conn">Conectando…</div>
+            </div>
+        </div>
+
+        <!-- Tab 1: Tablero y Control de Pregunta -->
+        <div id="tab-game" class="tab-content active">
+            <div class="admin-grid-game">
+                <!-- Panel superior: Tablero (ocupa todo el ancho) -->
+                <div class="card card-board">
+                    <h3>Tablero (abrir preguntas)</h3>
+                    <div id="admin-board" class="admin-board-grid"></div>
+                    <div class="status mt-10">
+                        Haz clic en una casilla disponible para abrir la pregunta.
+                    </div>
+                </div>
+
+                <!-- Panel inferior izquierdo: Control de pregunta -->
+                <div class="card card-question-control">
+                    <h3>Control de pregunta</h3>
+
+                    <!-- Estado actual -->
+                    <div class="status mb-8">
+                        Pregunta activa: <span id="has-question">-</span> |
+                        Jugador con turno: <span id="current-buzzer">-</span>
+                    </div>
+
+                    <!-- Modo moderador -->
+                    <div class="control wrap mb-8">
+                        <label for="admin-hide-answers">Ocultar respuestas</label>
+                        <input type="checkbox" id="admin-hide-answers" />
+                        <span class="status-inline">Estado: <span id="hide-answers-status">Desactivado</span></span>
+                    </div>
+
+                    <!-- Botones de control -->
+                    <div class="control wrap mb-8">
+                        <button id="btn-correct" class="btn-success">✔ Correcto</button>
+                        <button id="btn-incorrect" class="btn-danger">✖ Incorrecto</button>
+                        <button id="btn-cancel" class="btn-secondary">⎋ Cancelar</button>
+                    </div>
+
+                    <!-- Botones de respuesta -->
+                    <div class="control admin-answers mb-8">
+                        <div class="answer-label">Respuestas:</div>
+                        <button class="btn-primary admin-answer-btn" data-answer="0">a</button>
+                        <button class="btn-primary admin-answer-btn" data-answer="1">b</button>
+                        <button class="btn-primary admin-answer-btn" data-answer="2">c</button>
+                        <button class="btn-primary admin-answer-btn" data-answer="3">d</button>
+                    </div>
+
+                    <div class="status" id="admin-action-status">Usa a/b/c/d o los botones para responder, Escape para cancelar.</div>
+                </div>
+
+                <!-- Panel inferior derecho: Respuesta correcta -->
+                <div class="card card-correct-answer">
+                    <h3>Respuesta correcta (solo moderador)</h3>
+                    <div class="admin-info-content hidden" id="admin-correct-box">
+                        <div class="kv">Letra: <span id="admin-correct-letter">-</span></div>
+                        <div class="kv">Contenido: <span id="admin-correct-text">-</span></div>
+                    </div>
+                    <div class="admin-info-placeholder" id="admin-correct-placeholder">
+                        No hay pregunta activa
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: Equipos y Puntajes -->
+        <div id="tab-teams" class="tab-content">
+            <div class="admin-grid-teams">
+                <div class="card card-teams-selector">
+                    <h3>Equipos</h3>
+                    <div class="control">
+                        <label for="team-count-select">Número de equipos:</label>
+                        <select id="team-count-select"></select>
+                    </div>
+                    <div class="status">
+                        Actual: <span id="team-count-current">-</span>
+                    </div>
+                </div>
+
+                <div class="card card-scores">
+                    <h3>Puntajes</h3>
+                    <div id="admin-scores" class="scores-list">
+                        <!-- Filas de puntajes -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 3: Configuración -->
+        <div id="tab-config" class="tab-content">
+            <div class="admin-grid-config">
+                <!-- Panel superior izquierdo: Cargar nuevo banco -->
+                <div class="card card-config-load">
+                    <h3>Cargar nuevo banco de preguntas</h3>
+                    <div class="control wrap gap-8 mb-8">
+                        <button id="btn-pick-file" class="btn-primary">Seleccionar archivo</button>
+                        <span id="selected-file" class="muted">Ninguno</span>
+                        <input type="file" id="file-input" accept=".json,.csv" class="hidden" />
+                    </div>
+                    <div class="status" id="load-status">Listo para cargar archivos .csv o .json</div>
+                </div>
+
+                <!-- Panel superior derecho: Reinicio -->
+                <div class="card card-config-reset">
+                    <h3>Reiniciar ejercicio</h3>
+                    <p class="config-description">Reinicia el tablero y todos los puntajes. Esta acción no se puede deshacer.</p>
+                    <div class="control wrap mb-8">
+                        <button id="btn-reset-exercise" class="btn-danger">⟳ Reiniciar ejercicio</button>
+                    </div>
+                    <div class="status" id="reset-status">Listo para reiniciar</div>
+                </div>
+
+                <!-- Panel inferior: Listado de bancos (full width) -->
+                <div class="card card-config-banks">
+                    <h3>Bancos de preguntas disponibles</h3>
+                    <div id="question-banks-list" class="question-banks-list">
+                        <!-- Lista de bancos se generará dinámicamente -->
+                        <div class="banks-placeholder">No hay bancos de preguntas guardados</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    </body>
+    </html>
