@@ -7,6 +7,7 @@ const gameState = {
     currentQuestion: null,
     currentBuzzer: null,
     hideAnswers: false,
+    questionRevealed: false,
     selectedAnswer: -1,
     answerPending: false,
     triedPlayers: new Set(),
@@ -376,8 +377,12 @@ const sounds = {
 
 socket.on('connected', (data) => {
     console.log('📊 Estado inicial recibido');
-    if (data.game_state && typeof data.game_state.player_count === 'number') {
-        gameState.playerCount = data.game_state.player_count;
+    if (data.game_state) {
+        if (typeof data.game_state.player_count === 'number') {
+            gameState.playerCount = data.game_state.player_count;
+        }
+        gameState.hideAnswers = !!data.game_state.hide_answers;
+        gameState.questionRevealed = !!data.game_state.question_revealed;
     }
 
     renderBoard(data.board);
@@ -405,12 +410,26 @@ socket.on('question_opened', (data) => {
     gameState.selectedAnswer = -1;
     gameState.answerPending = false;
     gameState.triedPlayers = new Set();
+    gameState.questionRevealed = !!data.revealed;
     clearChoiceSelection();
     
     // Ocultar panel de ajuste si está visible
     document.getElementById('quick-adjust-panel').style.display = 'none';
     
     showQuestionPanel(data);
+    enableBuzzers(true);
+    if (gameState.questionRevealed) {
+        setStatus('Pregunta abierta. ?Toca tu timbre para responder!', 'info');
+    } else {
+        setStatus('Pregunta abierta (texto oculto). Puedes tocar tu timbre para responder.', 'info');
+    }
+});
+
+socket.on('question_revealed', (data) => {
+    console.log('?? Pregunta revelada para jugadores:', data);
+    gameState.questionRevealed = true;
+    gameState.currentQuestion = Object.assign({}, gameState.currentQuestion || {}, data);
+    showQuestionPanel(gameState.currentQuestion);
     enableBuzzers(true);
     setStatus('Pregunta abierta. ¡Toca tu timbre para responder!', 'info');
 });
@@ -423,12 +442,12 @@ socket.on('buzzer_activated', (data) => {
     refreshBuzzerState();
     setStatus(`Equipo ${data.player + 1} tiene el turno. ¡Responde!`, 'info');
 
-    // Habilitar opciones si están visibles
+    // Habilitar opciones si est?n visibles
     if (!gameState.hideAnswers) {
-        console.log('✅ Habilitando opciones para el jugador');
+        console.log('? Habilitando opciones para el jugador');
         enableChoices(true);
     } else {
-        console.log('🔒 Opciones ocultas (modo moderador)');
+        console.log('?? Opciones ocultas (modo moderador)');
     }
 });
 
@@ -519,6 +538,7 @@ socket.on('team_count_updated', (data) => {
 socket.on('close_question', () => {
     console.log('❌ Pregunta cerrada');
     closeQuestionPanel();
+    gameState.questionRevealed = false;
     gameState.currentQuestion = null;
     gameState.currentBuzzer = null;
     enableBuzzers(false);
@@ -541,6 +561,7 @@ socket.on('game_reset', (data) => {
     renderBoard(data);
     updateScores(data.scores);
     closeQuestionPanel();
+    gameState.questionRevealed = false;
     gameState.currentQuestion = null;
     gameState.currentBuzzer = null;
     gameState.selectedAnswer = -1;
@@ -726,28 +747,40 @@ function showQuestionPanel(question) {
     
     document.getElementById('question-category').textContent = question.category;
     document.getElementById('question-value').textContent = `Valor: ${question.value}`;
-    document.getElementById('question-text').textContent = question.question;
-    // document.getElementById('question-status').textContent = 'Esperando timbre...';
-    document.getElementById('question-status').textContent = '';
+
+    const questionTextEl = document.getElementById('question-text');
+    const lockEl = document.getElementById('question-lock');
+    const statusEl = document.getElementById('question-status');
+
+    const waitingReveal = !gameState.questionRevealed;
+    if (questionTextEl) {
+        questionTextEl.textContent = waitingReveal ? '' : question.question;
+        questionTextEl.style.display = waitingReveal ? 'none' : '';
+    }
+    if (lockEl) {
+        lockEl.classList.toggle('active', waitingReveal);
+    }
+    if (statusEl) {
+        statusEl.style.display = waitingReveal ? 'block' : 'none';
+        statusEl.textContent = waitingReveal ? 'Esperando a que el moderador muestre la pregunta...' : '';
+    }
     
-    // Determinar si hay imagen
     const hasImage = question.image && question.image_folder;
     
-    // Crear o limpiar el contenedor de contenido
     let contentWrapper = document.getElementById('question-content-wrapper');
     if (!contentWrapper) {
         contentWrapper = document.createElement('div');
         contentWrapper.id = 'question-content-wrapper';
-        
-        // Insertar después del texto de la pregunta
         const questionText = document.getElementById('question-text');
-        questionText.parentNode.insertBefore(contentWrapper, questionText.nextSibling);
+        const lockAnchor = document.getElementById('question-lock');
+        const referenceNode = lockAnchor ? lockAnchor.nextSibling : questionText.nextSibling;
+        questionText.parentNode.insertBefore(contentWrapper, referenceNode);
     }
     
+    contentWrapper.style.display = '';
     contentWrapper.innerHTML = '';
     contentWrapper.className = '';
     
-    // Crear contenedor de opciones PRIMERO
     const choicesWrapper = document.createElement('div');
     choicesWrapper.id = 'choices-wrapper';
     
@@ -757,7 +790,6 @@ function showQuestionPanel(question) {
     
     contentWrapper.appendChild(choicesWrapper);
     
-    // Manejar imagen si existe (se agrega DESPUÉS para que aparezca a la derecha)
     if (hasImage) {
         const imageContainer = document.createElement('div');
         imageContainer.id = 'question-image-container';
@@ -769,16 +801,14 @@ function showQuestionPanel(question) {
         
         img.onerror = function() {
             console.error('Error cargando imagen:', question.image);
-            imageContainer.innerHTML = '<div style="padding: 20px; background: rgba(255,0,0,0.1); border-radius: 8px; color: #fff;">⚠️ Imagen no disponible</div>';
+            imageContainer.innerHTML = '<div style="padding: 20px; background: rgba(255,0,0,0.1); border-radius: 8px; color: #fff;">?? Imagen no disponible</div>';
         };
         
         imageContainer.appendChild(img);
         contentWrapper.appendChild(imageContainer);
     }
     
-    // Configurar layout según el contexto
     if (hasImage && !gameState.hideAnswers) {
-        // Imagen + Respuestas visibles: Layout lado a lado
         contentWrapper.classList.add('with-image-and-choices');
         const imageContainer = contentWrapper.querySelector('#question-image-container');
         if (imageContainer) {
@@ -789,7 +819,6 @@ function showQuestionPanel(question) {
             img.classList.remove('centered');
         }
     } else if (hasImage && gameState.hideAnswers) {
-        // Imagen + Respuestas ocultas: Imagen centrada
         const imageContainer = contentWrapper.querySelector('#question-image-container');
         if (imageContainer) {
             imageContainer.classList.add('centered');
@@ -800,7 +829,6 @@ function showQuestionPanel(question) {
         }
     }
     
-    // Renderizar opciones
     if (question.choices && !gameState.hideAnswers) {
         question.choices.forEach((choice, idx) => {
             const option = document.createElement('div');
@@ -814,7 +842,6 @@ function showQuestionPanel(question) {
             radio.disabled = true;
             radio.id = `choice-${idx}`;
             
-            // Event listener para el radio button
             radio.addEventListener('change', () => {
                 if (!radio.disabled) {
                     selectChoice(idx);
@@ -830,8 +857,7 @@ function showQuestionPanel(question) {
             option.appendChild(radio);
             option.appendChild(label);
             
-            // Event listener para el div completo
-            option.addEventListener('click', (e) => {
+            option.addEventListener('click', () => {
                 if (!option.classList.contains('disabled')) {
                     selectChoice(idx);
                 }
@@ -841,10 +867,8 @@ function showQuestionPanel(question) {
         });
     } else if (gameState.hideAnswers) {
         if (!hasImage) {
-            // choicesContainer.innerHTML = '<p style="text-align:center;color:#FFD700;font-size:18px;padding:20px;">🔒 Modo moderador: respuestas ocultas</p>';
             choicesContainer.innerHTML = '';
         }
-        // Si hay imagen y respuestas ocultas, no mostrar nada en el contenedor de opciones
     }
     
     updateControlsMode();
@@ -855,6 +879,27 @@ function closeQuestionPanel() {
 
     elements.questionPanel.style.display = 'none';
     elements.boardContainer.style.display = 'block';
+
+    const lockEl = document.getElementById('question-lock');
+    if (lockEl) {
+        lockEl.classList.remove('active');
+    }
+    const questionTextEl = document.getElementById('question-text');
+    if (questionTextEl) {
+        questionTextEl.style.display = '';
+        questionTextEl.textContent = '';
+    }
+    const statusEl = document.getElementById('question-status');
+    if (statusEl) {
+        statusEl.style.display = 'none';
+        statusEl.textContent = '';
+    }
+    const contentWrapper = document.getElementById('question-content-wrapper');
+    if (contentWrapper) {
+        contentWrapper.innerHTML = '';
+        contentWrapper.style.display = 'none';
+    }
+
 
     // Limpiar estado
     gameState.currentQuestion = null;

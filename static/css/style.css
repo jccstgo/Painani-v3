@@ -697,6 +697,33 @@ body {
     justify-content: center;
 }
 
+#question-lock {
+    display: none;
+    border: 2px dashed rgba(255, 215, 0, 0.35);
+    border-radius: 16px;
+    padding: 24px 30px;
+    background: rgba(0, 0, 0, 0.35);
+    color: var(--white);
+    text-align: center;
+    font-size: 28px;
+    font-weight: 600;
+    box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.4);
+}
+
+#question-lock.active {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+}
+
+#question-lock .lock-hint {
+    font-size: 18px;
+    opacity: 0.8;
+    margin: 0;
+}
+
 #choices-container {
     margin-bottom: 20px;  
     flex: 1;  

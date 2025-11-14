@@ -73,6 +73,7 @@ class GameState:
         self.timer_active = False
         self.hide_answers = False
         self.images_folder = None  # Carpeta donde buscar imágenes
+        self.question_revealed = False
         
     def reset_game(self):
         """Reinicia el juego completo"""
@@ -83,6 +84,7 @@ class GameState:
         self.tried_players.clear()
         self.current_question = None
         self.timer_active = False
+        self.question_revealed = False
 
     def reset_round(self):
         """Reinicia solo el tablero/pregunta, preservando puntajes"""
@@ -92,6 +94,7 @@ class GameState:
         self.tried_players.clear()
         self.current_question = None
         self.timer_active = False
+        self.question_revealed = False
         
     def open_question(self, cat_idx: int, clue_idx: int) -> Dict:
         """Abre una pregunta del tablero"""
@@ -110,6 +113,7 @@ class GameState:
             "choices": clue["choices"],
             "answer": clue["answer"]
         }
+        self.question_revealed = False
 
         # Incluir texto de respuesta si existe para soporte de preguntas sin opciones
         if "answer_text" in clue and clue["answer_text"]:
@@ -125,6 +129,13 @@ class GameState:
         
         self.tried_players.clear()
         
+        return self.current_question
+
+    def reveal_question(self) -> Dict:
+        """Marca la pregunta actual como revelada para los jugadores."""
+        if self.current_question is None:
+            return {"error": "No hay pregunta activa"}
+        self.question_revealed = True
         return self.current_question
         
     def buzzer_press(self, player_idx: int) -> Dict:
@@ -188,6 +199,7 @@ class GameState:
             self.current_buzzer = None
             self.tried_players.clear()
             self.timer_active = False
+            self.question_revealed = False
             
             return {
                 "result": "correct",
@@ -221,6 +233,7 @@ class GameState:
                 self.tile_status[(cat_idx, clue_idx)] = 'used'
                 self.current_question = None
                 self.tried_players.clear()
+                self.question_revealed = False
                 
                 return {
                     "result": "incorrect",
@@ -252,6 +265,7 @@ class GameState:
         self.current_buzzer = None
         self.tried_players.clear()
         self.timer_active = False
+        self.question_revealed = False
         
         return {
             "result": "correct",
@@ -296,6 +310,7 @@ class GameState:
             self.tile_status[(cat_idx, clue_idx)] = 'used'
             self.current_question = None
             self.tried_players.clear()
+            self.question_revealed = False
             
             return {
                 "result": "incorrect",
@@ -314,6 +329,7 @@ class GameState:
         self.current_buzzer = None
         self.tried_players.clear()
         self.timer_active = False
+        self.question_revealed = False
         
         return {"success": True, "message": "Pregunta cancelada"}
         
@@ -371,7 +387,8 @@ class GameState:
             "timer_active": self.timer_active,
             "hide_answers": self.hide_answers,
             "has_question": self.current_question is not None,
-            "player_count": self.player_count
+            "player_count": self.player_count,
+            "question_revealed": self.question_revealed
         }
 
     def set_player_count(self, count: int) -> Dict:

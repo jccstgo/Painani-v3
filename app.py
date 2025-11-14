@@ -267,6 +267,7 @@ def handle_open_question(data):
     else:
         # Enviar pregunta (con o sin respuestas según modo)
         question_data = result.copy()
+        question_data['revealed'] = game.question_revealed
         if game.hide_answers:
             question_data.pop('answer', None)
             question_data.pop('choices', None)
@@ -283,6 +284,21 @@ def handle_open_question(data):
         if isinstance(choices, list) and 0 <= ans_idx < len(choices):
             admin_payload['answer_choice_text'] = choices[ans_idx]
         socketio.emit('question_opened_admin', admin_payload, room='admins')
+
+@socketio.on('reveal_question')
+def handle_reveal_question():
+    """El moderador decide mostrar la pregunta a los jugadores"""
+    result = game.reveal_question()
+
+    if 'error' in result:
+        emit('error', result, broadcast=False)
+    else:
+        question_data = result.copy()
+        question_data['revealed'] = True
+        if game.hide_answers:
+            question_data.pop('answer', None)
+            question_data.pop('choices', None)
+        emit('question_revealed', question_data, broadcast=True)
 
 @socketio.on('buzzer_press')
 def handle_buzzer(data):

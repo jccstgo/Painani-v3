@@ -17,6 +17,7 @@
     board: null,
     currentQuestionKey: null,
     hideAnswers: false,
+    questionRevealed: false,
     scores: [],
   };
 
@@ -48,6 +49,12 @@
     els.scoresRoot = $('admin-scores');
     els.resetBtn = $('btn-reset-exercise');
     els.resetStatus = $('reset-status');
+    els.showQuestionBtn = $('btn-show-question');
+    els.questionVisibility = $('question-visibility-status');
+    els.questionPreview = $('admin-question-preview');
+    els.questionCategory = $('admin-question-category');
+    els.questionValue = $('admin-question-value');
+    els.questionText = $('admin-question-text');
   }
 
   // -----------------------------
@@ -98,6 +105,7 @@
       const gs = data?.game_state || {};
       if (typeof gs.player_count === 'number') state.playerCount = gs.player_count;
       if (Array.isArray(gs.scores)) state.scores = gs.scores.slice();
+      state.questionRevealed = !!gs.question_revealed;
       renderTeamCountSelect(state.playerCount || (state.scores.length || 5));
       updateStatus();
     });
@@ -115,6 +123,7 @@
 
     socket.on('question_opened', (q) => {
       state.hasQuestion = true;
+      state.questionRevealed = !!q?.revealed;
       if (q && typeof q.cat_idx === 'number' && typeof q.clue_idx === 'number') {
         state.currentQuestionKey = `${q.cat_idx}-${q.clue_idx}`;
         highlightCurrentQuestion();
@@ -125,6 +134,7 @@
     socket.on('question_opened_admin', (q) => {
       // Contiene siempre la información completa, incluso en modo oculto
       renderCorrectInfo(q);
+      renderQuestionPreview(q);
     });
 
     socket.on('answer_result', (r) => {
@@ -135,11 +145,19 @@
       }
     });
 
+    socket.on('question_revealed', () => {
+      state.questionRevealed = true;
+      setActionStatus('Pregunta visible para los jugadores.', 'ok');
+      updateStatus();
+    });
+
     socket.on('close_question', () => {
       state.hasQuestion = false;
       state.currentBuzzer = null;
+      state.questionRevealed = false;
       updateStatus();
       renderCorrectInfo(null);
+      renderQuestionPreview(null);
     });
 
     socket.on('buzzer_activated', (d) => {
@@ -175,10 +193,12 @@
       }
       state.hasQuestion = false;
       state.currentBuzzer = null;
+      state.questionRevealed = false;
       updateStatus();
       setLoadStatus('Datos cargados (nueva ronda).', 'ok');
       fetchBoard();
       renderCorrectInfo(null);
+      renderQuestionPreview(null);
       renderScores(state.scores);
       setResetStatus('Ejercicio reiniciado.');
     });
@@ -207,6 +227,7 @@
         state.hasQuestion = !!gs.has_question;
         state.currentBuzzer = (typeof gs.current_buzzer === 'number') ? gs.current_buzzer : null;
         state.hideAnswers = !!gs.hide_answers;
+        state.questionRevealed = !!gs.question_revealed;
         state.scores = Array.isArray(gs.scores) ? gs.scores.slice() : [];
 
         renderTeamCountSelect(state.playerCount);
@@ -275,6 +296,10 @@
         s.emit('toggle_hide_answers', { hide });
         renderHideAnswersStatus(hide);
       });
+    }
+
+    if (els.showQuestionBtn) {
+      els.showQuestionBtn.addEventListener('click', revealQuestionAdmin);
     }
 
     // Reinicio del ejercicio
@@ -414,6 +439,18 @@
   function openQuestionAdmin(catIdx, clueIdx) {
     const s = getSocket();
     s.emit('open_question', { cat_idx: catIdx, clue_idx: clueIdx });
+  }
+
+  function revealQuestionAdmin() {
+    if (!state.hasQuestion) {
+      return setActionStatus('No hay pregunta activa que mostrar.', 'warn');
+    }
+    if (state.questionRevealed) {
+      return setActionStatus('La pregunta ya está visible para los jugadores.', 'info');
+    }
+    const s = getSocket();
+    s.emit('reveal_question');
+    setActionStatus('Mostrando pregunta a los jugadores...', 'info');
   }
 
   function moderatorCorrectAdmin() {
@@ -605,6 +642,33 @@
     const enabled = !!state.hasQuestion;
     [els.btnCorrect, els.btnIncorrect, els.btnCancel].forEach(b => { if (b) b.disabled = !enabled; });
     document.querySelectorAll('[data-answer]')?.forEach(btn => { btn.disabled = !enabled; });
+    updateQuestionVisibilityControls();
+  }
+
+  function updateQuestionVisibilityControls() {
+    if (!els.questionVisibility) return;
+
+    if (!state.hasQuestion) {
+      els.questionVisibility.textContent = 'Sin pregunta';
+      if (els.showQuestionBtn) {
+        els.showQuestionBtn.disabled = true;
+        els.showQuestionBtn.textContent = 'Mostrar pregunta a jugadores';
+      }
+      return;
+    }
+
+    if (state.questionRevealed) {
+      els.questionVisibility.textContent = 'Visible para jugadores';
+    } else {
+      els.questionVisibility.textContent = 'Oculta';
+    }
+
+    if (els.showQuestionBtn) {
+      els.showQuestionBtn.disabled = state.questionRevealed;
+      els.showQuestionBtn.textContent = state.questionRevealed
+        ? 'Pregunta mostrada'
+        : 'Mostrar pregunta a jugadores';
+    }
   }
 
   function renderCorrectInfo(q) {
@@ -635,6 +699,27 @@
     } else {
       els.correctBox.classList.add('hidden');
       if (placeholder) placeholder.classList.remove('hidden');
+    }
+  }
+
+  function renderQuestionPreview(q) {
+    if (!els.questionPreview) return;
+    const hasData = q && typeof q === 'object';
+    if (els.questionCategory) {
+      els.questionCategory.textContent = hasData ? (q.category || 'Categoría') : 'Categoría';
+    }
+    if (els.questionValue) {
+      const valueText = hasData && typeof q.value === 'number' ? `Valor: ${q.value}` : 'Valor: 0';
+      els.questionValue.textContent = valueText;
+    }
+    if (els.questionText) {
+      if (hasData && q.question) {
+        els.questionText.textContent = q.question;
+      } else if (state.hasQuestion) {
+        els.questionText.textContent = 'Cargando pregunta...';
+      } else {
+        els.questionText.textContent = 'Selecciona una pregunta para verla aquí.';
+      }
     }
   }
 
